@@ -9,10 +9,22 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
+
+def lire_env(nom, defaut=""):
+    """Lit une variable d'environnement Render (ignore espaces, casse et guillemets parasites)."""
+    for cle, valeur in os.environ.items():
+        if cle.strip().upper() == nom:
+            return valeur.strip().strip('"').strip("'").strip()
+    return defaut
+
+
 # ---------- CONFIGURATION (via variables d'environnement Render) ----------
-WEBHOOK_URL = os.environ.get("https://discord.com/api/webhooks/1520429832331202760/N7XAzD0RGOzSB3xOh0fK1R2AE8meWWUwMoJ1rDnwuZIljA0nWyDC13-Ql3JaFeZyYSwG", "")
-ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN", "change-moi")
+# Ne JAMAIS mettre le vrai lien ou le vrai jeton ici : seulement le NOM de la variable.
+WEBHOOK_URL = lire_env("DISCORD_WEBHOOK_URL", "")
+ACCESS_TOKEN = lire_env("ACCESS_TOKEN", "change-moi")
 # ---------------------------------------------------------------------------
+
+print("[diag] webhook configuré :", bool(WEBHOOK_URL), "| jeton configuré :", ACCESS_TOKEN != "change-moi")
 
 TAILLE_BLOC = 480
 TAILLE_LOT = 3
