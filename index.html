@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relais urgent</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --muted: #8b949e;
+    --accent: #3fb950;
+    --accent-dim: #2ea043;
+    --danger: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "SF Mono", "Consolas", "Menlo", monospace;
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+  .carte { width: 100%; max-width: 560px; }
+  .entete {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4px;
+  }
+  h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: 0.02em; margin: 0; }
+  #etatServeur { font-size: 0.75rem; }
+  #etatServeur.ok { color: var(--accent); }
+  #etatServeur.erreur { color: var(--danger); }
+  #etatServeur.attente { color: var(--muted); }
+  p.sous-titre {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin: 0 0 24px;
+    line-height: 1.5;
+  }
+  textarea {
+    width: 100%;
+    min-height: 220px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 12px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+  }
+  textarea:focus { outline: 1px solid var(--accent); }
+  .compteur { text-align: right; font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+  button {
+    margin-top: 16px;
+    width: 100%;
+    background: var(--accent-dim);
+    color: #0d1117;
+    border: none;
+    border-radius: 6px;
+    padding: 14px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  button:disabled { background: #21262d; color: #6e7681; cursor: not-allowed; }
+  #statut { margin-top: 12px; font-size: 0.85rem; min-height: 1.2em; line-height: 1.4; }
+  #statut.erreur { color: var(--danger); }
+  #statut.ok { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="carte">
+  <div class="entete">
+    <h1>Envoyer un message urgent</h1>
+    <span id="etatServeur" class="attente">vérification...</span>
+  </div>
+  <p class="sous-titre">Colle ton texte et envoie-le. Tu peux fermer la page juste après.</p>
+
+  <textarea id="texte" placeholder="Colle le texte ici..."></textarea>
+  <div class="compteur"><span id="nbCar">0</span> caractères</div>
+
+  <button id="envoyer">Envoyer</button>
+  <div id="statut"></div>
+</div>
+
+<script>
+// Adresse du serveur Render (à remplacer par l'URL donnée par Render, avec /envoyer à la fin)
+const BACKEND_URL = "https://ralalala.onrender.com/envoyer";
+// Doit être identique à la variable ACCESS_TOKEN réglée sur Render
+const ACCESS_TOKEN = "Caca";
+
+const texteEl = document.getElementById("texte");
+const nbCarEl = document.getElementById("nbCar");
+const boutonEl = document.getElementById("envoyer");
+const statutEl = document.getElementById("statut");
+const etatServeurEl = document.getElementById("etatServeur");
+
+texteEl.addEventListener("input", () => {
+  nbCarEl.textContent = texteEl.value.length;
+});
+
+function afficherStatut(message, type) {
+  statutEl.textContent = message;
+  statutEl.className = type || "";
+}
+
+async function verifierServeur() {
+  try {
+    const base = BACKEND_URL.replace(/\/envoyer\/?$/, "");
+    // timeout plus long : Render peut mettre ~30 s à se réveiller
+    const r = await fetch(base + "/statut", { signal: AbortSignal.timeout(40000) });
+    if (r.ok) {
+      etatServeurEl.textContent = "serveur en ligne";
+      etatServeurEl.className = "ok";
+    } else {
+      throw new Error("réponse invalide");
+    }
+  } catch (e) {
+    etatServeurEl.textContent = "serveur éteint";
+    etatServeurEl.className = "erreur";
+  }
+}
+
+verifierServeur();
+
+boutonEl.addEventListener("click", async () => {
+  const texte = texteEl.value.trim();
+  if (!texte) {
+    afficherStatut("Écris ou colle un texte d'abord.", "erreur");
+    return;
+  }
+
+  boutonEl.disabled = true;
+  afficherStatut("Envoi en cours...", "");
+
+  try {
+    const reponse = await fetch(BACKEND_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + ACCESS_TOKEN
+      },
+      body: JSON.stringify({ texte }),
+      signal: AbortSignal.timeout(40000)
+    });
+
+    const data = await reponse.json().catch(() => ({}));
+
+    if (reponse.ok) {
+      const nb = data.blocs || 0;
+      afficherStatut(`Reçu par le serveur (${nb} bloc${nb > 1 ? "s" : ""}). Tu peux fermer cette page.`, "ok");
+      texteEl.value = "";
+      nbCarEl.textContent = "0";
+      etatServeurEl.textContent = "serveur en ligne";
+      etatServeurEl.className = "ok";
+    } else if (reponse.status === 429) {
+      afficherStatut("Trop d'envois récents, réessaie plus tard.", "erreur");
+    } else {
+      afficherStatut("Erreur : " + (data.erreur || reponse.status), "erreur");
+    }
+  } catch (e) {
+    afficherStatut("Serveur éteint ou injoignable. Réessaie dans quelques instants.", "erreur");
+    etatServeurEl.textContent = "serveur éteint";
+    etatServeurEl.className = "erreur";
+  } finally {
+    boutonEl.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
