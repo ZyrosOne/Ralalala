@@ -10,7 +10,7 @@ app = Flask(__name__)
 CORS(app)
 
 # ---------- CONFIGURATION (via variables d'environnement Render) ----------
-WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
+WEBHOOK_URL = os.environ.get("https://discord.com/api/webhooks/1520429832331202760/N7XAzD0RGOzSB3xOh0fK1R2AE8meWWUwMoJ1rDnwuZIljA0nWyDC13-Ql3JaFeZyYSwG", "")
 ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN", "change-moi")
 # ---------------------------------------------------------------------------
 
@@ -59,7 +59,9 @@ def decouper_texte(texte, taille_max):
 def envoyer_discord(contenu):
     try:
         r = requests.post(WEBHOOK_URL, json={"content": contenu}, timeout=10)
-        return r.status_code == 204
+        if not r.ok:
+            print(f"[discord] code {r.status_code} : {r.text[:200]}")
+        return r.ok
     except Exception as e:
         print(f"[erreur webhook] {e}")
         return False
